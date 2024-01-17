@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>渲染器</title>
+</head>
+<body>
+  <div id="app"></div>
+  
+  <script>
+    // const vnode = {
+    //   tag: 'div',
+    //   props: {
+    //     onClick: ()=> alert('hello')
+    //   },
+    //   children: [
+    //     {
+    //       tag: 'span',
+    //       props: {},
+    //       children: '我是span'
+    //     }
+    //   ]
+    // }
+
+    // function renderer(vnode, container) {
+    //   const ele = document.createElement(vnode.tag)
+    //   const props = vnode.props
+    //   Object.keys(props).forEach(k=> {
+    //     ele[k] = props[k]
+    //   })
+
+    //   if(Array.isArray(vnode.children)) {
+    //     vnode.children.forEach((node)=> renderer(node, ele))
+    //   } else {
+    //     ele.innerText = vnode.children
+    //   }
+
+    //   container.appendChild(ele)
+    // }
+
+    // renderer(vnode, document.querySelector('#app'))
+
+    // 响应式
+    const obj = {
+      text: 'hello world'
+    }
+    function effect() {
+      document.body.innerText = obj.text
+    }
+
+
+    const bucket = []
+    function watch(obj, fn) {
+      const proxyObj =  new Proxy(obj, {
+        get(target , prop) {
+          return target[prop]
+        },
+        set(target, prop, value) {
+          target[prop] = value
+          bucket.forEach(fn=> fn())
+        }
+      })
+      bucket.push(fn)
+      fn()
+      return proxyObj
+    }
+    
+    
+    window.obj = watch(obj, effect)
+    window.obj = watch(obj, ()=> {
+      console.log('obj 发生改变')
+    })
+  </script>
+</body>
+</html>
