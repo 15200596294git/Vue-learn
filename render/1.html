@@ -14,27 +14,34 @@
           key Set 对象的每个key都有对应的fn
     */
     // 
+    const bucket = new WeakMap()
+    let activeEffect
     function cleanup(effectFn) {
-      effectFn.deps.forEach(deps=> {
-        deps.delete(effectFn)
+      effectFn.deps.forEach(effectsSet=> {
+        effectsSet.delete(effectFn)
       })
 
       effectFn.deps.length = 0
     }
-
-    let activeFn
     function effect(fn) {
+      // 需要把函数(副作用函数)和所依赖它的集合关联起来
+      // 调用effect函数，传入副作用函数，将该副作用函数包裹在一个函数内
+      // 包裹函数设置deps属性，并且把包裹函数赋值给activeEffect
       const effectFn = ()=> {
+        // 执行副作用函数(收集依赖)前，把包裹函数赋值给activeEffect
+        // 这样在执行真正的副作用函数时才能正确收集到依赖
+
+        // 副作用收集前前，还要清除已有的副作用
         cleanup(effectFn)
-        activeFn = effectFn
+        activeEffect = effectFn
         fn()
-      } 
+      }
       effectFn.deps = []
       effectFn()
     }
-    function track(target, key) {
-      if (!activeFn) return
 
+    function track(target, key) {
+      if (!activeEffect) return
       let depsMap = bucket.get(target)
       if (!depsMap) {
         bucket.set(target, depsMap = new Map())
@@ -43,42 +50,46 @@
       if (!deps) {
         depsMap.set(key, deps = new Set())
       }
-      deps.add(activeFn)
-
-      activeFn.deps.push(deps)
+      deps.add(activeEffect)
+      // 包裹着副作用函数的包裹函数 和 依赖进行关联
+      activeEffect.deps.push(deps)
     }
     function trigger(target, key) {
       const depsMap = bucket.get(target)
       if (!depsMap) return
 
-      const deps = depsMap.get(key)
-      if (!deps) return
-      deps.forEach(fn => fn())
+      const effects = depsMap.get(key)
+      // effects && effects.forEach(fn => fn())
+      const effectsToRun = new Set(effects)
+      effectsToRun.forEach(fn=> fn())
     }
-    const bucket = new WeakMap()
+
     const data = {
-      text: 'Hello World',
-      a: 1,
+      text: 'Hello World'
     }
     const obj = new Proxy(data, {
       get(target, key) {
-        track(target ,key)
+        track(target, key)
         return target[key]
       },
       set(target, key, value) {
         target[key] = value
         trigger(target, key)
         return true
-      },
+      }
     })
+
 
     effect(() => {
       document.body.innerText = obj.text
-      console.log('obj.text', obj.text);
     })
     effect(() => {
-      console.log('obj.a', obj.a)
+      console.log(obj.text);
     })
+    setTimeout(() => {
+      obj.text = '雷猴'
+    }, 1000)
+
     window.obj = obj
 
 
