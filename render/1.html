@@ -15,6 +15,7 @@
     */
     // 
     const bucket = new WeakMap()
+    const effectStack = []
     let activeEffect
     function cleanup(effectFn) {
       effectFn.deps.forEach(effectsSet=> {
@@ -23,7 +24,7 @@
 
       effectFn.deps.length = 0
     }
-    function effect(fn) {
+    function effect(fn, options = {}) {
       // 需要把函数(副作用函数)和所依赖它的集合关联起来
       // 调用effect函数，传入副作用函数，将该副作用函数包裹在一个函数内
       // 包裹函数设置deps属性，并且把包裹函数赋值给activeEffect
@@ -33,10 +34,17 @@
 
         // 副作用收集前前，还要清除已有的副作用
         cleanup(effectFn)
-        activeEffect = effectFn
-        fn()
+
+        // 调用effectFn的时候入栈，首先执行嵌套最深的副作用函数
+        // 执行一个之后，出栈 将activeEffect设置为栈顶元素
+        activeEffect = effectFn // 设置副作用函数，用于get时候收集
+        effectStack.push(effectFn) // 嵌套时副作用包裹函数入栈
+        fn() // 相当于执行get，收集副作用函数
+        effectStack.pop() // 执行完就出栈，进入下一轮
+        activeEffect = effectStack[effectStack.length - 1]
       }
       effectFn.deps = []
+      effectFn.options = options
       effectFn()
     }
 
@@ -61,11 +69,22 @@
       const effects = depsMap.get(key)
       // effects && effects.forEach(fn => fn())
       const effectsToRun = new Set(effects)
-      effectsToRun.forEach(fn=> fn())
+      effectsToRun.forEach(fn=> {
+        if(fn !== activeEffect) {
+          if(fn.options.scheduler) {
+            debugger
+            fn.options.scheduler(fn)
+          } else {
+            fn()
+          }
+        }
+      })
     }
 
     const data = {
-      text: 'Hello World'
+      foo: true,
+      bar: true,
+      foo: 1
     }
     const obj = new Proxy(data, {
       get(target, key) {
@@ -80,15 +99,34 @@
     })
 
 
-    effect(() => {
-      document.body.innerText = obj.text
+    let temp1, temp2
+    // effect(() => {
+    //   console.log('effectFn1执行');
+
+    //   effect(()=> {
+    //     console.log('effectFn2执行')
+    //     temp2 = obj.bar
+    //   })
+
+    //   temp1 = obj.foo
+    // })
+    // effect(() => {
+    //   console.log(obj.text);
+    // })
+    // setTimeout(() => {
+    //   obj.text = '雷猴'
+    // }, 1000)
+
+
+    effect(()=> {
+      console.log(obj.foo);
+    }, {
+      scheduler: (fn)=> {
+        setTimeout(fn)
+      }
     })
-    effect(() => {
-      console.log(obj.text);
-    })
-    setTimeout(() => {
-      obj.text = '雷猴'
-    }, 1000)
+    obj.foo++
+    console.log('结束')
 
     window.obj = obj
 
