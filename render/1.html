@@ -181,7 +181,7 @@
     // getter中读取了一个值，随即对应的key绑定副作用函数getter
     // 某个值改变时，触发set并trigger，再执行副作用函数，这个时候我们再通过scheduler调度，运行cb
     // 那也就完成了getter中对应的值改变时，触发cb函数
-    function watch(source, cb) {
+    function watch(source, cb, { immediate } = {}) {
       let getter
       if (typeof source === 'function') {
         getter = source
@@ -190,12 +190,23 @@
         getter = () => traverse(source)
       }
 
-      effect(() => getter, {
-        scheduler() {
-          cb()
-        }
+      const scheduler = () => {
+        newValue = effectFn()
+        cb(newValue, oldValue)
+        oldValue = newValue
       }
-      )
+      let newValue, oldValue
+      const effectFn = effect(() => getter(), {
+        scheduler,
+        lazy: true
+      })
+      
+
+      if (immediate) {
+        scheduler()
+      } else {
+        oldValue = effectFn()
+      }
     }
     // obj是一个响应式对象
     // 第二个参数为副作用函数
@@ -209,8 +220,11 @@
     //   console.log('obj 发生变化')
     // })
 
-    watch(() => obj.bar, () => {
-      console.log('obj.bar改变')
+    watch(() => obj.bar, (newValue, oldValue) => {
+      // console.log('obj.bar改变')
+      console.log(newValue, oldValue);
+    }, {
+      immediate: true
     })
 
 
