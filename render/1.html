@@ -143,16 +143,75 @@
     }
 
     // debugger
-    const sumRes = computed(() => obj.foo + obj.bar)
+    // const sumRes = computed(() => obj.foo + obj.bar)
 
-    effect(() => {
-      // 在该副作用函数中读取 sumRes.value
-      console.log(sumRes.value)
+    // effect(() => {
+    //   // 在该副作用函数中读取 sumRes.value
+    //   console.log(sumRes.value)
+    // })
+
+    // 读取对象中的所有key(get 操作)
+    // 首次传入，value必须为对象或者数组，否则直接return(正常情况下是只能监听对象)
+    // 如果是一个对象，就把该对象添加到seen(也就是说如果value是一个对象，才会添加到seen，防止后面循环引用一直读取)
+    // 之后对对象进行for in遍历
+    // 可能存在嵌套，所以在循环中调用
+    // 这个递归会一直等到所有的嵌套都读取完成，所以最后return value的时候是所有属性都读取完了
+    // 第二次传入，判断是否为一个对象，如果不是，就return，不需要进行读取
+    // 这个时候seen.has()就生效了，如果这个对象或数组之前读取过，也会return
+    function traverse(value, seen = new Set()) {
+      if (typeof value !== 'object' || value === null || seen.has(value)) {
+        return
+      }
+      seen.add(value)
+      for (let k in value) {
+        traverse(value[k], seen)
+      }
+
+      return value
+    }
+    // 接收一个数据源对象，第二个参数是源对象中的值发生变化时要执行的函数
+    // 所以我们需要手动的读取对象的所有key
+    // 所以，当source某个值变化时，会trigger，删除依赖，然后读取，收集依赖
+    // 不过我们还需要它做一件事，就是某个值变化时，执行我们自定义传入的一个函数
+    // 此时需要用到scheduler
+
+    // source可以不为一个对象，可以为一个getter
+    // getter是一个函数，函数内部读取了响应式对象的值
+    // 也就相当于 effect(getter, { scheduler: cb() })
+    // getter中读取了一个值，随即对应的key绑定副作用函数getter
+    // 某个值改变时，触发set并trigger，再执行副作用函数，这个时候我们再通过scheduler调度，运行cb
+    // 那也就完成了getter中对应的值改变时，触发cb函数
+    function watch(source, cb) {
+      let getter
+      if (typeof source === 'function') {
+        getter = source
+      } else {
+        // 否则为一个响应式对象
+        getter = () => traverse(source)
+      }
+
+      effect(() => getter, {
+        scheduler() {
+          cb()
+        }
+      }
+      )
+    }
+    // obj是一个响应式对象
+    // 第二个参数为副作用函数
+    // 当obj中的任何值改变时，触发副作用函数
+    // obj -> key1 -> fn
+    // obj -> key2 -> fn
+    // obj中的所有key都有一个副作用函数，
+    // watch(obj, ()=> {
+    //   // console.log(obj.foo);
+    //   // obj.foo
+    //   console.log('obj 发生变化')
+    // })
+
+    watch(() => obj.bar, () => {
+      console.log('obj.bar改变')
     })
-
-    // 修改 obj.foo 的值
-    
-    obj.foo++
 
 
 
